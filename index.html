@@ -28,6 +28,7 @@
   button:disabled{opacity:.5;cursor:wait}
   .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
   .chk{display:flex;gap:6px;align-items:center;margin-top:8px;font-size:13px;color:var(--muted)}
+  #loading{position:fixed;left:16px;bottom:16px;z-index:9;background:var(--pri);color:#fff;padding:8px 14px;border-radius:10px;font-weight:bold;box-shadow:0 4px 14px rgba(0,0,0,.2)}
   #msg{position:sticky;top:0;z-index:5;display:none;padding:10px 14px;border-radius:10px;margin-bottom:12px;font-weight:bold}
   #msg.ok{display:block;background:#dcfce7;color:#14532d}
   #msg.err{display:block;background:#fee2e2;color:#7f1d1d}
@@ -54,6 +55,7 @@
 <body>
 <div class="wrap">
   <h1>ئامرازی گۆڕینی ڕیزەکان</h1>
+  <div id="loading" hidden>⏳ چاوەڕێ بکە...</div>
   <div id="msg"></div>
 
   <div id="app">
@@ -124,7 +126,7 @@ const $ = id => document.getElementById(id);
 let STATE = null;
 
 // لینکی Google Script-ەکەت (ناگۆڕێت)
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwvPYQl1YDp65TkwdnZ_lwFR-8cFyb5FrmTpQhON4O05irFz8Jhninsg6_uAKcM-R1X/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxsPiX_YJ7uYEL3kZDrmrS-juTYAeLgu-25bKefuaJ5ZIawO3kd1d7js1Dsnq7Dm3I2/exec';
 async function call(fn, ...args){
   let r;
   try {
@@ -141,7 +143,7 @@ async function call(fn, ...args){
 
 function msg(text, type){ const m=$('msg'); m.textContent=text; m.className=type||'info'; if(type!=='err') setTimeout(()=>{ if(m.textContent===text) m.className=''; }, 6000); }
 function errText(e){ return (e && e.message) ? e.message.replace(/^Error:\s*/,'') : String(e); }
-function busy(on){ document.querySelectorAll('button').forEach(b=>{ if(b.id!=='bUndo'||on) b.disabled=on; }); if(!on) applyState(); }
+function busy(on){ $('loading').hidden = !on;  document.querySelectorAll('button').forEach(b=>{ if(b.id!=='bUndo'||on) b.disabled=on; }); if(!on) applyState(); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function colLetters(){
   const s=STATE.settings, out=[];
@@ -183,7 +185,6 @@ async function init(){
     const s = STATE.settings;
     $('url').value=s.url; $('startCol').value=s.startCol; $('endCol').value=s.endCol; $('keyCol').value=s.keyCol;
     if(s.sheet){ $('sheet').innerHTML='<option>'+esc(s.sheet)+'</option>'; }
-    if(s.url){ loadSheets(true); }
     if(STATE.lastRows.length) $('gridRows').value = STATE.lastRows.join(' ');
     applyState();
     if(!s.url) msg('سەرەتا لینکی Google Sheet دابنێ و پاشەکەوتی بکە.','info');
@@ -230,8 +231,11 @@ async function doClear(){
     msg(r.done+' ڕیز سڕانەوە ✓ ئێستا زانیاری نوێ لە خشتەی خوارەوە دابنێ.'+(r.undoOk?'':' (گەڕاندنەوە بۆ ئەم کارە بەردەست نییە)'),'ok');
     busy(false);
     $('gridRows').value = txt;
-    await loadGridUI();
+    GRID = r.grid;
+    GRID.rows.forEach(x => x.orig = x.values.slice());
+    renderGrid();
     $('grid').scrollIntoView({behavior:'smooth', block:'start'});
+    const f = document.querySelector('#grid input'); if(f) f.focus();
     return;
   }catch(e){ msg(errText(e),'err'); }
   busy(false);
